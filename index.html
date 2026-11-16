@@ -1,0 +1,2213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>VALORANT x RIVALS ARENA: ULTRA GRAPHICS EDITION</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #050914;
+      font-family: 'Noto Sans KR', 'Inter', sans-serif;
+      color: #f8fafc;
+      touch-action: none;
+    }
+    #gameContainer {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .tac-btn {
+      clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+      transition: all 0.15s ease;
+    }
+    .tac-btn:active {
+      transform: scale(0.92);
+      filter: brightness(1.2);
+    }
+    .agent-card {
+      clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .agent-card:hover {
+      transform: translateY(-5px);
+    }
+    .agent-card.selected {
+      box-shadow: 0 0 28px rgba(6, 182, 212, 0.85);
+      border-color: #22d3ee !important;
+    }
+    #virtualJoystickZone {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      width: 130px;
+      height: 130px;
+      background: rgba(6, 182, 212, 0.08);
+      border: 2px solid rgba(6, 182, 212, 0.35);
+      border-radius: 50%;
+      touch-action: none;
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #joystickKnob {
+      width: 54px;
+      height: 54px;
+      background: rgba(6, 182, 212, 0.9);
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      position: absolute;
+      transform: translate(0px, 0px);
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.9);
+      pointer-events: none;
+    }
+    .mobile-act-btn {
+      position: fixed;
+      z-index: 25;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      touch-action: none;
+    }
+    .mobile-act-btn.cooldown {
+      filter: grayscale(1);
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    #crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 20;
+    }
+    .ch-line {
+      position: absolute;
+      background-color: #22d3ee;
+      box-shadow: 0 0 8px rgba(34, 211, 238, 0.9);
+      transition: transform 0.05s ease-out;
+    }
+    #hitmarker {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 24px;
+      height: 24px;
+      transform: translate(-50%, -50%) rotate(45deg);
+      pointer-events: none;
+      z-index: 22;
+      opacity: 0;
+      transition: opacity 0.12s ease-out;
+    }
+    #hitmarker::before, #hitmarker::after {
+      content: '';
+      position: absolute;
+      background-color: #ffffff;
+    }
+    #hitmarker.headshot::before, #hitmarker.headshot::after {
+      background-color: #fbbf24;
+      box-shadow: 0 0 12px #f59e0b;
+    }
+    #hitmarker::before { top: 11px; left: 0; right: 0; height: 2px; }
+    #hitmarker::after { left: 11px; top: 0; bottom: 0; width: 2px; }
+    
+    #skillHitBanner {
+      position: fixed;
+      top: 18%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      z-index: 40;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    #skillHitBanner.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="gameContainer"></div>
+
+  <div id="flashOverlay" class="fixed inset-0 z-30 pointer-events-none bg-cyan-100 opacity-0 transition-opacity duration-100"></div>
+  <div id="dashOverlay" class="fixed inset-0 z-20 pointer-events-none opacity-0 transition-opacity duration-150" style="box-shadow: inset 0 0 120px rgba(6, 182, 212, 0.9);"></div>
+  <div id="damageVignette" class="fixed inset-0 z-20 pointer-events-none opacity-0 transition-opacity duration-150" style="box-shadow: inset 0 0 140px rgba(244, 63, 94, 0.95);"></div>
+
+  <div id="skillHitBanner" class="bg-cyan-950/90 border-2 border-cyan-400 px-6 py-2 rounded-xl shadow-[0_0_30px_rgba(6,182,212,0.9)] flex items-center gap-2">
+    <span class="text-xl">🎯</span>
+    <span id="skillHitText" class="text-sm font-black text-cyan-300 tracking-wider">스킬 적중!</span>
+  </div>
+
+  <div id="damageNumbersLayer" class="fixed inset-0 z-20 pointer-events-none overflow-hidden"></div>
+
+  <div id="crosshair">
+    <div id="chTop" class="ch-line" style="width: 2px; height: 8px; left: -1px; top: -14px;"></div>
+    <div id="chBottom" class="ch-line" style="width: 2px; height: 8px; left: -1px; top: 6px;"></div>
+    <div id="chLeft" class="ch-line" style="height: 2px; width: 8px; top: -1px; left: -14px;"></div>
+    <div id="chRight" class="ch-line" style="height: 2px; width: 8px; top: -1px; left: 6px;"></div>
+    <div class="w-1.5 h-1.5 rounded-full bg-cyan-300 absolute -left-[3px] -top-[3px] shadow-[0_0_6px_#22d3ee]"></div>
+  </div>
+  <div id="hitmarker"></div>
+
+  <div id="topHud" class="hidden fixed top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 pointer-events-none">
+    <div class="bg-slate-900/90 border-l-4 border-cyan-400 px-3 py-1 rounded-r flex items-center gap-2 shadow-lg">
+      <div class="text-right">
+        <div id="hudPlayerAgent" class="text-[10px] font-extrabold text-cyan-400 uppercase">JETT</div>
+      </div>
+      <div id="hudPlayerScore" class="text-2xl font-black text-white leading-none">0</div>
+    </div>
+
+    <div class="bg-slate-950/95 border border-cyan-500/40 px-3 py-1 rounded text-center shadow-lg min-w-[100px]">
+      <div id="hudRoundText" class="text-[9px] font-extrabold tracking-wider text-cyan-400 uppercase">10선승제 1v1</div>
+      <div id="hudTimer" class="text-base font-black text-slate-200 font-mono leading-tight">01:30</div>
+    </div>
+
+    <div class="bg-slate-900/90 border-r-4 border-rose-500 px-3 py-1 rounded-l flex items-center gap-2 shadow-lg">
+      <div id="hudAiScore" class="text-2xl font-black text-white leading-none">0</div>
+      <div class="text-left">
+        <div id="hudAiAgent" class="text-[10px] font-bold text-rose-400 uppercase">PHOENIX</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fixed top-2 right-2 z-30 flex items-center gap-2">
+    <button id="soundToggleBtn" class="bg-slate-900/85 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 px-2.5 py-1 rounded text-[11px] font-bold shadow">🔊 사운드 ON</button>
+    <button id="pauseBtn" class="hidden bg-slate-900/85 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 px-2.5 py-1 rounded text-[11px] font-bold shadow">메뉴</button>
+  </div>
+
+  <div id="bottomHud" class="hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 pointer-events-none select-none">
+    <div class="bg-slate-950/90 border border-cyan-500/40 px-3 py-1.5 rounded-lg flex flex-col gap-1 shadow-xl backdrop-blur-md">
+      <div class="flex items-center justify-between gap-4 text-[11px] font-extrabold">
+        <span class="text-cyan-400">HEALTH</span>
+        <span id="hpText" class="text-white font-mono">100/100</span>
+      </div>
+      <div class="w-32 h-2 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
+        <div id="hpBar" class="h-full bg-cyan-400 rounded-full transition-all duration-150 shadow-[0_0_8px_#22d3ee]" style="width: 100%;"></div>
+      </div>
+    </div>
+
+    <div class="bg-slate-950/90 border border-cyan-500/40 px-4 py-1.5 rounded-lg flex items-center gap-4 shadow-xl backdrop-blur-md">
+      <div>
+        <div id="weaponNameDisplay" class="text-[9px] font-black text-cyan-400 tracking-wider">VANDAL</div>
+        <div class="flex items-baseline gap-1">
+          <span id="ammoText" class="text-2xl font-black text-white font-mono">25</span>
+          <span class="text-xs text-slate-400 font-mono">/ 75</span>
+        </div>
+      </div>
+      <button id="reloadBtn" class="tac-btn pointer-events-auto bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/60 px-2.5 py-1 text-[11px] font-bold text-cyan-300">재장전</button>
+    </div>
+
+    <div class="flex items-center gap-1.5 pointer-events-auto">
+      <button id="skill1Btn" class="mobile-act-btn w-12 h-12 bg-slate-950/90 border border-cyan-500/50 hover:bg-cyan-950 relative">
+        <span class="text-base" id="skill1Icon">⚡</span>
+        <span id="skill1Key" class="text-[9px] text-cyan-400 font-bold">Q</span>
+        <span id="skill1Cd" class="absolute inset-0 bg-slate-950/80 text-[11px] font-mono text-amber-400 font-bold items-center justify-center hidden"></span>
+      </button>
+      <button id="skill2Btn" class="mobile-act-btn w-12 h-12 bg-slate-950/90 border border-cyan-500/50 hover:bg-cyan-950 relative">
+        <span class="text-base" id="skill2Icon">💨</span>
+        <span id="skill2Key" class="text-[9px] text-cyan-400 font-bold">E</span>
+        <span id="skill2Cd" class="absolute inset-0 bg-slate-950/80 text-[11px] font-mono text-amber-400 font-bold items-center justify-center hidden"></span>
+      </button>
+      <button id="ultimateBtn" class="mobile-act-btn w-14 h-14 bg-slate-950/90 border border-rose-500/60 hover:bg-rose-950 relative overflow-hidden">
+        <div id="ultFill" class="absolute bottom-0 left-0 right-0 bg-rose-500/30 pointer-events-none" style="height: 100%;"></div>
+        <span class="text-lg z-10" id="ultIcon">🗡️</span>
+        <span class="text-[9px] text-rose-400 font-bold z-10">X</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="mobileActionControls" class="hidden fixed bottom-6 right-6 z-20 flex flex-col items-end gap-2.5">
+    <div class="flex items-center gap-2">
+      <button id="aimBtn" class="tac-btn w-12 h-12 bg-slate-900/85 border border-cyan-500/50 rounded-xl flex items-center justify-center text-cyan-300 font-bold text-[11px] shadow-lg backdrop-blur">조준(ADS)</button>
+      <button id="switchGunBtn" class="tac-btn w-12 h-12 bg-slate-900/85 border border-cyan-500/50 rounded-xl flex items-center justify-center text-cyan-300 font-bold text-[11px] shadow-lg backdrop-blur">무기교체</button>
+    </div>
+    <button id="fireBtn" class="tac-btn w-20 h-20 bg-cyan-500/90 border-2 border-white rounded-2xl flex flex-col items-center justify-center text-slate-950 font-black shadow-[0_0_25px_rgba(6,182,212,0.9)] active:scale-90">
+      <span class="text-2xl">🔥</span>
+      <span class="text-[10px] tracking-tighter">FIRE</span>
+    </button>
+  </div>
+
+  <div id="virtualJoystickZone" class="hidden">
+    <div id="joystickKnob"></div>
+  </div>
+
+  <!-- LOBBY SCREEN -->
+  <div id="lobbyScreen" class="fixed inset-0 z-50 bg-[#050914] flex flex-col items-center justify-between p-6 overflow-y-auto">
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.18)_0%,transparent_75%)] pointer-events-none"></div>
+    
+    <div class="text-center z-10 mt-2">
+      <div class="text-xs font-black tracking-[0.3em] text-cyan-400 mb-1">ROBLOX RIVALS x VALORANT</div>
+      <h1 class="text-2xl md:text-4xl font-black tracking-wider uppercase bg-gradient-to-r from-cyan-400 via-teal-200 to-rose-500 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(6,182,212,0.6)]">RIVALS ARENA EDITION</h1>
+    </div>
+
+    <!-- MAP SELECTOR -->
+    <div class="z-10 w-full max-w-xl my-1">
+      <div class="text-xs font-bold text-cyan-400 tracking-wider mb-2">MAP SELECT</div>
+      <div class="grid grid-cols-2 gap-3">
+        <button id="mapTacBtn" class="tac-btn p-3 rounded-xl border-2 border-cyan-400 bg-cyan-500/20 text-left flex flex-col gap-1">
+          <div class="text-xs font-black text-white">🌆 TACTICAL WAREHOUSE</div>
+          <div class="text-[10px] text-slate-300">넓고 엄폐물이 많은 전술 구역</div>
+        </button>
+        <button id="mapArenaBtn" class="tac-btn p-3 rounded-xl border-2 border-slate-700 bg-slate-900 text-left flex flex-col gap-1">
+          <div class="text-xs font-black text-cyan-300">⚡ CYBER ARENA (RIVALS)</div>
+          <div class="text-[10px] text-slate-300">컴팩트하고 치열한 대칭형 아레나</div>
+        </button>
+      </div>
+    </div>
+
+    <div class="z-10 w-full max-w-3xl my-1">
+      <div class="text-xs font-bold text-cyan-400 tracking-wider mb-2">AGENT SELECT</div>
+      <div id="agentGrid" class="grid grid-cols-2 md:grid-cols-5 gap-2.5"></div>
+    </div>
+
+    <div class="z-10 w-full max-w-md bg-slate-900/90 border border-cyan-500/30 p-3 rounded-xl flex flex-col gap-2">
+      <div class="flex justify-between items-center">
+        <span class="text-xs font-black text-cyan-400">시점 감도 조절</span>
+        <span id="sensValue" class="text-xs font-mono text-cyan-300">1.0배</span>
+      </div>
+      <input type="range" id="sensRange" min="0.2" max="3.0" step="0.1" value="1.0" class="w-full accent-cyan-400 cursor-pointer">
+      <div class="flex justify-between items-center pt-1 border-t border-slate-800">
+        <span class="text-xs font-black text-cyan-400">모바일 자이로 에이밍</span>
+        <button id="gyroToggleBtn" class="tac-btn px-3 py-1 bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold">OFF</button>
+      </div>
+    </div>
+
+    <div class="z-10 w-full max-w-md flex flex-col gap-2 mb-2">
+      <button id="startMatchBtn" class="tac-btn w-full py-3.5 bg-gradient-to-r from-cyan-500 to-teal-400 text-slate-950 font-black text-base shadow-[0_0_35px_rgba(6,182,212,0.8)]">전장 입장 (MATCH START)</button>
+    </div>
+  </div>
+
+  <!-- BUY PHASE SHOP -->
+  <div id="buyScreen" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md hidden flex flex-col p-6">
+    <div class="flex items-center justify-between pb-4 border-b border-cyan-500/30">
+      <div>
+        <div class="text-[10px] font-black text-cyan-400 tracking-widest">BUY PHASE</div>
+        <h2 class="text-2xl font-black text-white">무기 및 장비 상점</h2>
+      </div>
+      <div class="bg-slate-900 border border-cyan-500/40 px-4 py-2 rounded-lg text-right">
+        <div class="text-[9px] font-bold text-cyan-400">크레드 잔액</div>
+        <div id="playerCredits" class="text-xl font-black text-amber-400 font-mono">800</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-6 flex-1 overflow-y-auto">
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
+        <h3 class="text-xs font-black text-cyan-400 tracking-wider">주무기 (RIFLES / SNIPERS)</h3>
+        <div id="primaryShopList" class="flex flex-col gap-2"></div>
+      </div>
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
+        <h3 class="text-xs font-black text-cyan-400 tracking-wider">보조무기 (SIDEARMS)</h3>
+        <div id="sidearmShopList" class="flex flex-col gap-2"></div>
+      </div>
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
+        <h3 class="text-xs font-black text-cyan-400 tracking-wider">아머 및 실드 (SHIELDS)</h3>
+        <div id="armorShopList" class="flex flex-col gap-2"></div>
+      </div>
+    </div>
+
+    <button id="closeBuyBtn" class="tac-btn w-full py-3.5 bg-cyan-500 text-slate-950 font-black text-sm shadow-lg">라운드 준비 완료 (READY)</button>
+  </div>
+
+  <!-- ROUND END SCREEN -->
+  <div id="roundEndScreen" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-lg hidden flex flex-col items-center justify-center p-6 text-center">
+    <div id="roundEndTitle" class="text-4xl md:text-6xl font-black tracking-widest mb-2 uppercase text-cyan-400">ROUND WON</div>
+    <div id="roundEndSub" class="text-sm md:text-base text-slate-300 font-bold mb-8">적이 처치되었습니다.</div>
+    <div class="bg-slate-900 border border-cyan-500/40 px-8 py-4 rounded-xl mb-8 flex gap-8">
+      <div>
+        <div class="text-[10px] text-cyan-400 font-bold">플레이어 승수</div>
+        <div id="endPlayerScore" class="text-3xl font-black text-white">0</div>
+      </div>
+      <div class="w-[1px] bg-cyan-500/30"></div>
+      <div>
+        <div class="text-[10px] text-rose-400 font-bold">상대 AI 승수</div>
+        <div id="endAiScore" class="text-3xl font-black text-white">0</div>
+      </div>
+    </div>
+    <button id="nextRoundBtn" class="tac-btn px-10 py-4 bg-cyan-500 text-slate-950 font-black text-base shadow-[0_0_30px_rgba(6,182,212,0.9)]">다음 라운드 진행</button>
+  </div>
+
+  <!-- PAUSE MENU -->
+  <div id="pauseScreen" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden flex flex-col items-center justify-center p-6">
+    <div class="bg-slate-900 border border-cyan-500/40 p-6 rounded-2xl w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl">
+      <h2 class="text-xl font-black text-cyan-400">게임 설정 및 일시정지</h2>
+      <div class="flex flex-col gap-2 text-left">
+        <label class="text-xs text-cyan-400 font-bold">감도 조절</label>
+        <input type="range" id="pauseSensRange" min="0.2" max="3.0" step="0.1" value="1.0" class="w-full accent-cyan-400">
+      </div>
+      <button id="resumeBtn" class="tac-btn py-3 bg-cyan-500 text-slate-950 font-black text-xs mt-2">게임 재개</button>
+      <button id="restartBtn" class="tac-btn py-3 bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs">라운드 재시작</button>
+      <button id="quitBtn" class="tac-btn py-3 bg-rose-500/20 border border-rose-500/50 text-rose-400 font-bold text-xs">로비로 나가기</button>
+    </div>
+  </div>
+
+  <!-- AUDIO ENGINE -->
+  <script>
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      playShoot(weaponType = 'Vandal') {
+        if (!this.enabled) return;
+        this.init();
+        const t = this.ctx.currentTime;
+
+        const subOsc = this.ctx.createOscillator();
+        const subGain = this.ctx.createGain();
+        subOsc.type = 'triangle';
+        const startFreq = weaponType === 'Operator' ? 120 : (weaponType === 'Sheriff' ? 200 : 250);
+        subOsc.frequency.setValueAtTime(startFreq, t);
+        subOsc.frequency.exponentialRampToValueAtTime(25, t + 0.2);
+
+        subGain.gain.setValueAtTime(0.7, t);
+        subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+
+        subOsc.connect(subGain);
+        subGain.connect(this.ctx.destination);
+        subOsc.start(t);
+        subOsc.stop(t + 0.22);
+
+        const noiseBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.15, this.ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseBuffer.length; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+
+        const whiteNoise = this.ctx.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(weaponType === 'Operator' ? 1000 : 2200, t);
+        filter.Q.setValueAtTime(1.5, t);
+
+        const noiseGain = this.ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.5, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+        whiteNoise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(this.ctx.destination);
+
+        whiteNoise.start(t);
+        whiteNoise.stop(t + 0.16);
+      }
+
+      playHit(headshot = false) {
+        if (!this.enabled) return;
+        this.init();
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = headshot ? 'sine' : 'square';
+        osc.frequency.setValueAtTime(headshot ? 950 : 650, t);
+        osc.frequency.exponentialRampToValueAtTime(220, t + 0.08);
+
+        gain.gain.setValueAtTime(0.35, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(t);
+        osc.stop(t + 0.1);
+      }
+
+      playSkill() {
+        if (!this.enabled) return;
+        this.init();
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, t);
+        osc.frequency.exponentialRampToValueAtTime(950, t + 0.22);
+
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(t);
+        osc.stop(t + 0.26);
+      }
+    }
+    const sound = new SoundEngine();
+  </script>
+
+  <!-- GAME ENGINE -->
+  <script>
+    const AGENTS = [
+      { 
+        id: 'jett', name: '제트', role: '타격대', color: 0x06b6d4, icon: '💨', 
+        qName: '연막 폭풍(연막)', qIcon: '☁️', eName: '순풍(대시)', eIcon: '💨', xName: '블레이드 스톰', xIcon: '🗡️',
+        desc: '연막 생성과 고기동성 대시로 적을 교란하는 태풍 요원' 
+      },
+      { 
+        id: 'phoenix', name: '피닉스', role: '타격대', color: 0xf97316, icon: '🔥', 
+        qName: '화염 폭풍(공격)', qIcon: '💥', eName: '핫핸즈(회복)', eIcon: '🔥', xName: '런잇백', xIcon: '🔥',
+        desc: '강력한 화염 폭격과 회복으로 전장을 지배하는 불사조' 
+      },
+      { 
+        id: 'sage', name: '세이지', role: '감시자', color: 0x10b981, icon: '❄️', 
+        qName: '얼음 파편(공격)', qIcon: '🧊', eName: '회복 구슬', eIcon: '💚', xName: '부활', xIcon: '✝️',
+        desc: '치유와 강력한 얼음 공격으로 구역을 장악하는 수호자' 
+      },
+      { 
+        id: 'omen', name: '오멘', role: '전략가', color: 0x8b5cf6, icon: '👁️', 
+        qName: '그림자 장막(연막)', qIcon: '🌑', eName: '스라우트 스텝', eIcon: '🌀', xName: '그림자 걸음', xIcon: '👁️',
+        desc: '어둠의 장막 연막과 순간이동으로 심장을 흔드는 암살자' 
+      },
+      { 
+        id: 'neon', name: '네온', role: '타격대', color: 0x38bdf8, icon: '⚡', 
+        qName: '플라즈마 볼트(공격)', qIcon: '⚡', eName: '하이 기어', eIcon: '🏃', xName: '오버드라이브', xIcon: '⚡',
+        desc: '강력한 플라즈마 번개 폭격과 초고속 질주를 가진 스피드스터' 
+      }
+    ];
+
+    const WEAPONS = {
+      vandal: { name: 'Vandal', type: 'primary', price: 2900, damage: 40, hsDamage: 160, ammo: 25, recoil: 0.035, fireRate: 0.12, auto: true, accentColor: 0x06b6d4 },
+      phantom: { name: 'Phantom', type: 'primary', price: 2900, damage: 35, hsDamage: 140, ammo: 30, recoil: 0.025, fireRate: 0.1, auto: true, accentColor: 0x8b5cf6 },
+      operator: { name: 'Operator', type: 'primary', price: 4700, damage: 150, hsDamage: 250, ammo: 5, recoil: 0.12, fireRate: 1.1, auto: false, accentColor: 0xf43f5e },
+      classic: { name: 'Classic', type: 'sidearm', price: 0, damage: 26, hsDamage: 78, ammo: 12, recoil: 0.015, fireRate: 0.35, auto: false, accentColor: 0x94a3b8 },
+      sheriff: { name: 'Sheriff', type: 'sidearm', price: 800, damage: 55, hsDamage: 159, ammo: 6, recoil: 0.06, fireRate: 0.55, auto: false, accentColor: 0xfbbf24 }
+    };
+
+    const ARMORS = {
+      none: { name: '노멀', price: 0, hp: 0 },
+      light: { name: '경형 아머', price: 400, hp: 25 },
+      heavy: { name: '중형 아머', price: 1000, hp: 50 }
+    };
+
+    let gameState = 'LOBBY';
+    let selectedAgent = AGENTS[0];
+    let aiAgent = AGENTS[1];
+    let selectedMap = 'warehouse'; // warehouse 또는 arena
+    let playerCredits = 800;
+    let playerScore = 0;
+    let aiScore = 0;
+    let roundNum = 1;
+    let roundTimer = 90;
+    let timerInterval = null;
+
+    let playerHp = 100;
+    let playerMaxHp = 100;
+    let playerArmor = 0;
+    let playerPrimary = WEAPONS.vandal;
+    let playerSidearm = WEAPONS.classic;
+    let activeWeapon = playerPrimary;
+    let currentAmmo = activeWeapon.ammo;
+    let isReloading = false;
+    let isAiming = false;
+    let isFiring = false;
+    let lastShootTime = 0;
+
+    let qCooldown = 0;
+    let eCooldown = 0;
+
+    let aiHp = 100;
+    let aiArmor = 50;
+    let aiSkillTimer = 0;
+
+    let scene, camera, renderer;
+    let weaponGroup, muzzleFlashMesh, muzzleLight;
+    let weaponRecoilOffset = 0;
+    let weaponSwayTime = 0;
+
+    let aiGroup;
+    let aiMoveAngle = 0;
+    let projectiles = [];
+    let smokes = [];
+    let bulletTracers = [];
+    let hitSparks = [];
+    let ambientParticles;
+    let aiShootTimer = 0;
+    let neonLights = [];
+    let mapColliders = [];
+    let mapObjectsGroup = null;
+
+    let isMouseDown = false;
+    let cameraPitch = 0, cameraYaw = 0;
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    
+    let joystickActive = false;
+    let joystickTouchId = null;
+    let joystickOrigin = { x: 0, y: 0 };
+    let joystickVector = { x: 0, y: 0 };
+
+    let sensitivity = 1.0;
+    let gyroEnabled = false;
+    let lookTouchId = null;
+    let lastLookX = 0, lastLookY = 0;
+
+    function createProceduralFloorTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, 512, 512);
+
+      for (let i = 0; i < 3500; i++) {
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.08)';
+        ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+      }
+
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(0, 0, 512, 512);
+      ctx.strokeRect(256, 0, 256, 512);
+      ctx.strokeRect(0, 256, 512, 256);
+
+      ctx.strokeStyle = 'rgba(14, 165, 233, 0.25)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 128); ctx.lineTo(512, 128);
+      ctx.moveTo(128, 0); ctx.lineTo(128, 512);
+      ctx.stroke();
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(24, 24);
+      return tex;
+    }
+
+    function createProceduralWallTexture(accentHex = '#0284c7') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      const grad = ctx.createLinearGradient(0, 0, 0, 512);
+      grad.addColorStop(0, '#1e293b');
+      grad.addColorStop(0.5, '#334155');
+      grad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 512);
+
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(8, 8, 496, 496);
+      ctx.beginPath();
+      ctx.moveTo(0, 256); ctx.lineTo(512, 256);
+      ctx.stroke();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 440, 512, 72);
+      ctx.fillStyle = accentHex;
+      for (let x = -60; x < 560; x += 48) {
+        ctx.beginPath();
+        ctx.moveTo(x, 512);
+        ctx.lineTo(x + 24, 512);
+        ctx.lineTo(x + 48, 450);
+        ctx.lineTo(x + 24, 450);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.fillStyle = accentHex;
+      ctx.fillRect(0, 40, 512, 10);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      return tex;
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initLobby();
+      initThree();
+      initEvents();
+    });
+
+    function initLobby() {
+      const grid = document.getElementById('agentGrid');
+      grid.innerHTML = '';
+      AGENTS.forEach((agent) => {
+        const div = document.createElement('div');
+        const isSelected = selectedAgent.id === agent.id;
+        div.className = `agent-card bg-slate-900/90 border-2 ${isSelected ? 'border-cyan-400 selected' : 'border-slate-800'} p-3 rounded-xl cursor-pointer flex flex-col gap-1.5`;
+        div.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="text-xl">${agent.icon}</span>
+            <span class="text-[9px] font-bold text-cyan-400">${agent.role}</span>
+          </div>
+          <div>
+            <div class="text-sm font-black text-white">${agent.name}</div>
+            <div class="text-[9px] text-slate-300 line-clamp-2">${agent.desc}</div>
+          </div>
+        `;
+        div.addEventListener('click', () => {
+          selectedAgent = agent;
+          initLobby();
+        });
+        grid.appendChild(div);
+      });
+
+      // 맵 선택 버튼 이벤트
+      const mapTacBtn = document.getElementById('mapTacBtn');
+      const mapArenaBtn = document.getElementById('mapArenaBtn');
+      
+      mapTacBtn.addEventListener('click', () => {
+        selectedMap = 'warehouse';
+        mapTacBtn.className = 'tac-btn p-3 rounded-xl border-2 border-cyan-400 bg-cyan-500/20 text-left flex flex-col gap-1';
+        mapArenaBtn.className = 'tac-btn p-3 rounded-xl border-2 border-slate-700 bg-slate-900 text-left flex flex-col gap-1';
+      });
+
+      mapArenaBtn.addEventListener('click', () => {
+        selectedMap = 'arena';
+        mapArenaBtn.className = 'tac-btn p-3 rounded-xl border-2 border-cyan-400 bg-cyan-500/20 text-left flex flex-col gap-1';
+        mapTacBtn.className = 'tac-btn p-3 rounded-xl border-2 border-slate-700 bg-slate-900 text-left flex flex-col gap-1';
+      });
+
+      renderShop();
+    }
+
+    function renderShop() {
+      const primaryList = document.getElementById('primaryShopList');
+      const sidearmList = document.getElementById('sidearmShopList');
+      const armorList = document.getElementById('armorShopList');
+
+      primaryList.innerHTML = '';
+      sidearmList.innerHTML = '';
+      armorList.innerHTML = '';
+
+      ['vandal', 'phantom', 'operator'].forEach(k => {
+        const w = WEAPONS[k];
+        const btn = document.createElement('button');
+        btn.className = `tac-btn p-2.5 rounded-lg flex items-center justify-between border ${playerPrimary.name === w.name ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' : 'bg-slate-950 border-slate-800 text-slate-300'}`;
+        btn.innerHTML = `<span class="font-bold text-xs">${w.name}</span><span class="font-mono text-xs text-amber-400">🪙 ${w.price}</span>`;
+        btn.addEventListener('click', () => {
+          if (playerCredits >= w.price) {
+            playerCredits -= w.price;
+            playerPrimary = w;
+            activeWeapon = w;
+            currentAmmo = w.ammo;
+            updateWeaponViewmodel();
+            updateHud();
+            renderShop();
+          }
+        });
+        primaryList.appendChild(btn);
+      });
+
+      ['classic', 'sheriff'].forEach(k => {
+        const w = WEAPONS[k];
+        const btn = document.createElement('button');
+        btn.className = `tac-btn p-2.5 rounded-lg flex items-center justify-between border ${playerSidearm.name === w.name ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' : 'bg-slate-950 border-slate-800 text-slate-300'}`;
+        btn.innerHTML = `<span class="font-bold text-xs">${w.name}</span><span class="font-mono text-xs text-amber-400">🪙 ${w.price}</span>`;
+        btn.addEventListener('click', () => {
+          if (playerCredits >= w.price) {
+            playerCredits -= w.price;
+            playerSidearm = w;
+            updateWeaponViewmodel();
+            updateHud();
+            renderShop();
+          }
+        });
+        sidearmList.appendChild(btn);
+      });
+
+      Object.keys(ARMORS).forEach(k => {
+        const a = ARMORS[k];
+        const isSelected = (k === 'none' && playerArmor === 0) || (k === 'light' && playerArmor === 25) || (k === 'heavy' && playerArmor === 50);
+        const btn = document.createElement('button');
+        btn.className = `tac-btn p-2.5 rounded-lg flex items-center justify-between border ${isSelected ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' : 'bg-slate-950 border-slate-800 text-slate-300'}`;
+        btn.innerHTML = `<span class="font-bold text-xs">${a.name}</span><span class="font-mono text-xs text-amber-400">🪙 ${a.price}</span>`;
+        btn.addEventListener('click', () => {
+          if (playerCredits >= a.price) {
+            playerCredits -= a.price;
+            playerArmor = a.hp;
+            playerMaxHp = 100 + playerArmor;
+            playerHp = playerMaxHp;
+            updateHud();
+            renderShop();
+          }
+        });
+        armorList.appendChild(btn);
+      });
+    }
+
+    function initThree() {
+      const container = document.getElementById('gameContainer');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x050914);
+      scene.fog = new THREE.FogExp2(0x050914, 0.0075);
+
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 1.6, 50);
+      scene.add(camera);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.35;
+      container.appendChild(renderer.domElement);
+
+      const hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x0f172a, 0.85);
+      scene.add(hemiLight);
+
+      const mainLight = new THREE.DirectionalLight(0xffffff, 1.7);
+      mainLight.position.set(45, 70, 45);
+      mainLight.castShadow = true;
+      mainLight.shadow.mapSize.width = 2048;
+      mainLight.shadow.mapSize.height = 2048;
+      mainLight.shadow.camera.near = 0.5;
+      mainLight.shadow.camera.far = 190;
+      const d = 75;
+      mainLight.shadow.camera.left = -d;
+      mainLight.shadow.camera.right = d;
+      mainLight.shadow.camera.top = d;
+      mainLight.shadow.camera.bottom = -d;
+      mainLight.shadow.bias = -0.0005;
+      scene.add(mainLight);
+
+      const rimLight = new THREE.DirectionalLight(0x06b6d4, 0.65);
+      rimLight.position.set(-50, 30, -50);
+      scene.add(rimLight);
+
+      createFirstPersonWeapon();
+      loadSelectedMap();
+      createAmbientParticles();
+      createHighDetailHumanoidAI();
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function loadSelectedMap() {
+      if (mapObjectsGroup) {
+        scene.remove(mapObjectsGroup);
+      }
+      mapObjectsGroup = new THREE.Group();
+      scene.add(mapObjectsGroup);
+      mapColliders = [];
+      neonLights = [];
+
+      if (selectedMap === 'warehouse') {
+        buildWarehouseMap();
+      } else {
+        buildCyberArenaMap();
+      }
+    }
+
+    // 🌆 기존 웨어하우스 맵
+    function buildWarehouseMap() {
+      const floorTex = createProceduralFloorTexture();
+      const wallTexCyan = createProceduralWallTexture('#06b6d4');
+      const wallTexRose = createProceduralWallTexture('#f43f5e');
+
+      const floorGeo = new THREE.PlaneGeometry(160, 160, 64, 64);
+      const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.35, metalness: 0.45 });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      mapObjectsGroup.add(floor);
+
+      const wallMat = new THREE.MeshStandardMaterial({ map: wallTexCyan, roughness: 0.35, metalness: 0.4 });
+      const accentWallMat = new THREE.MeshStandardMaterial({
+        map: wallTexRose,
+        roughness: 0.25,
+        metalness: 0.65,
+        emissive: 0x881337,
+        emissiveIntensity: 0.25
+      });
+      const pillarMat = new THREE.MeshStandardMaterial({ map: wallTexCyan, roughness: 0.3, metalness: 0.55 });
+      const neonTrimMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
+
+      const outerWalls = [
+        { x: 0, z: -75, w: 160, h: 10, d: 2 },
+        { x: 0, z: 75, w: 160, h: 10, d: 2 },
+        { x: -75, z: 0, w: 2, h: 10, d: 160 },
+        { x: 75, z: 0, w: 2, h: 10, d: 160 }
+      ];
+
+      outerWalls.forEach(c => {
+        const geo = new THREE.BoxGeometry(c.w, c.h, c.d);
+        const mesh = new THREE.Mesh(geo, wallMat);
+        mesh.position.set(c.x, c.h / 2, c.z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mapObjectsGroup.add(mesh);
+        mapColliders.push(mesh);
+
+        const trim = new THREE.Mesh(new THREE.BoxGeometry(c.w + 0.1, 0.25, c.d + 0.1), neonTrimMat);
+        trim.position.set(c.x, c.h - 0.5, c.z);
+        mapObjectsGroup.add(trim);
+      });
+
+      const internalStructures = [
+        { x: 0, z: 0, w: 12, h: 6, d: 12, mat: accentWallMat },
+        { x: -25, z: -25, w: 10, h: 5, d: 4, mat: wallMat },
+        { x: 25, z: 25, w: 10, h: 5, d: 4, mat: wallMat },
+        { x: -25, z: 25, w: 4, h: 5, d: 10, mat: wallMat },
+        { x: 25, z: -25, w: 4, h: 5, d: 10, mat: wallMat },
+        { x: 0, z: -40, w: 20, h: 4.5, d: 3, mat: pillarMat },
+        { x: 0, z: 40, w: 20, h: 4.5, d: 3, mat: pillarMat }
+      ];
+
+      internalStructures.forEach(c => {
+        const geo = new THREE.BoxGeometry(c.w, c.h, c.d);
+        const mesh = new THREE.Mesh(geo, c.mat);
+        mesh.position.set(c.x, c.h / 2, c.z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mapObjectsGroup.add(mesh);
+        mapColliders.push(mesh);
+
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(c.w + 0.15, 0.15, c.d + 0.15), neonTrimMat);
+        cap.position.set(c.x, c.h, c.z);
+        mapObjectsGroup.add(cap);
+      });
+
+      const archGeo = new THREE.TorusGeometry(18, 0.25, 12, 64);
+      const archMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4 });
+      const arch = new THREE.Mesh(archGeo, archMat);
+      arch.position.set(0, 14, 0);
+      arch.rotation.x = Math.PI / 2;
+      mapObjectsGroup.add(arch);
+
+      [{ x: 0, y: 9, z: 0, color: 0x22d3ee }, { x: -45, y: 6, z: -45, color: 0x38bdf8 }, { x: 45, y: 6, z: 45, color: 0xf43f5e }].forEach(n => {
+        const pointLight = new THREE.PointLight(n.color, 3.8, 50);
+        pointLight.position.set(n.x, n.y, n.z);
+        mapObjectsGroup.add(pointLight);
+        neonLights.push(pointLight);
+      });
+    }
+
+    // ⚡ 로블록스 라이벌 아레나 스타일 맵 (CYBER ARENA)
+    function buildCyberArenaMap() {
+      const arenaFloorTex = createProceduralFloorTexture();
+      const arenaWallTex = createProceduralWallTexture('#38bdf8');
+
+      // 원형 링 아레나 바닥
+      const floorGeo = new THREE.CylinderGeometry(55, 55, 1.2, 32);
+      const floorMat = new THREE.MeshStandardMaterial({ map: arenaFloorTex, roughness: 0.25, metalness: 0.8 });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.position.set(0, -0.6, 0);
+      floor.receiveShadow = true;
+      mapObjectsGroup.add(floor);
+      mapColliders.push(floor);
+
+      // 아레나 외곽 원형 배리어 월 (관람석 구조)
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2;
+        const x = Math.cos(angle) * 52;
+        const z = Math.sin(angle) * 52;
+        const wallGeo = new THREE.BoxGeometry(28, 8, 3.5);
+        const wallMat = new THREE.MeshStandardMaterial({ map: arenaWallTex, roughness: 0.3, metalness: 0.6 });
+        const wall = new THREE.Mesh(wallGeo, wallMat);
+        wall.position.set(x, 4, z);
+        wall.rotation.y = -angle;
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        mapObjectsGroup.add(wall);
+        mapColliders.push(wall);
+      }
+
+      // 중앙 홀로그램 오벨리스크 및 대칭형 커버 (라이벌 아레나 특유의 중앙 구조물)
+      const centerPillarGeo = new THREE.BoxGeometry(6, 10, 6);
+      const centerPillarMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.15, metalness: 0.9, emissive: 0x0284c7, emissiveIntensity: 0.4 });
+      const centerPillar = new THREE.Mesh(centerPillarGeo, centerPillarMat);
+      centerPillar.position.set(0, 5, 0);
+      centerPillar.castShadow = true;
+      mapObjectsGroup.add(centerPillar);
+      mapColliders.push(centerPillar);
+
+      // 대칭형 사이드 엄폐물 박스들 (아레나 스타일)
+      const boxes = [
+        { x: -22, z: -22, w: 10, h: 4, d: 4 },
+        { x: 22, z: 22, w: 10, h: 4, d: 4 },
+        { x: -22, z: 22, w: 4, h: 4, d: 10 },
+        { x: 22, z: -22, w: 4, h: 4, d: 10 },
+        { x: 0, z: -30, w: 14, h: 4.5, d: 3 },
+        { x: 0, z: 30, w: 14, h: 4.5, d: 3 }
+      ];
+
+      boxes.forEach(b => {
+        const geo = new THREE.BoxGeometry(b.w, b.h, b.d);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.7 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(b.x, b.h / 2, b.z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mapObjectsGroup.add(mesh);
+        mapColliders.push(mesh);
+
+        // 상단 네온 엣지
+        const edge = new THREE.Mesh(new THREE.BoxGeometry(b.w + 0.1, 0.2, b.d + 0.1), new THREE.MeshBasicMaterial({ color: 0xf43f5e }));
+        edge.position.set(b.x, b.h, b.z);
+        mapObjectsGroup.add(edge);
+      });
+
+      // 아레나 상공 대형 네온 링
+      const ringGeo = new THREE.TorusGeometry(38, 0.4, 16, 64);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.set(0, 18, 0);
+      ring.rotation.x = Math.PI / 2;
+      mapObjectsGroup.add(ring);
+
+      [{ x: 0, y: 12, z: 0, color: 0x06b6d4 }, { x: -30, y: 8, z: -30, color: 0x38bdf8 }, { x: 30, y: 8, z: 30, color: 0xf43f5e }].forEach(n => {
+        const pointLight = new THREE.PointLight(n.color, 4.5, 60);
+        pointLight.position.set(n.x, n.y, n.z);
+        mapObjectsGroup.add(pointLight);
+        neonLights.push(pointLight);
+      });
+    }
+
+    function createFirstPersonWeapon() {
+      weaponGroup = new THREE.Group();
+
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.25, metalness: 0.85 });
+      const barrelMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.2, metalness: 0.95 });
+      const neonMat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, emissive: 0x06b6d4, emissiveIntensity: 1.5 });
+
+      const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.52), bodyMat);
+      receiver.position.set(0, 0, -0.15);
+      weaponGroup.add(receiver);
+
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.018, 0.35, 12), barrelMat);
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(0, 0.02, -0.52);
+      weaponGroup.add(barrel);
+
+      const neonStrip = new THREE.Mesh(new THREE.BoxGeometry(0.086, 0.015, 0.44), neonMat);
+      neonStrip.position.set(0, 0.02, -0.15);
+      neonStrip.name = 'weaponNeonStrip';
+      weaponGroup.add(neonStrip);
+
+      const sightFrame = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.045, 0.08), barrelMat);
+      sightFrame.position.set(0, 0.08, -0.1);
+      weaponGroup.add(sightFrame);
+
+      const sightGlass = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.042, 0.032),
+        new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+      );
+      sightGlass.position.set(0, 0.08, -0.1);
+      weaponGroup.add(sightGlass);
+
+      const mag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.08), bodyMat);
+      mag.position.set(0, -0.12, -0.15);
+      mag.rotation.x = 0.22;
+      weaponGroup.add(mag);
+
+      const flashGeo = new THREE.OctahedronGeometry(0.09, 0);
+      const flashMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0 });
+      muzzleFlashMesh = new THREE.Mesh(flashGeo, flashMat);
+      muzzleFlashMesh.position.set(0, 0.02, -0.72);
+      weaponGroup.add(muzzleFlashMesh);
+
+      muzzleLight = new THREE.PointLight(0xfbbf24, 0, 6);
+      muzzleLight.position.set(0, 0.05, -0.75);
+      weaponGroup.add(muzzleLight);
+
+      weaponGroup.position.set(0.28, -0.26, -0.45);
+      camera.add(weaponGroup);
+    }
+
+    function updateWeaponViewmodel() {
+      if (!weaponGroup) return;
+      const neonStrip = weaponGroup.getObjectByName('weaponNeonStrip');
+      if (neonStrip && activeWeapon.accentColor) {
+        neonStrip.material.color.setHex(activeWeapon.accentColor);
+        neonStrip.material.emissive.setHex(activeWeapon.accentColor);
+      }
+      if (activeWeapon.type === 'sidearm') {
+        weaponGroup.scale.set(0.75, 0.85, 0.6);
+      } else if (activeWeapon.name === 'Operator') {
+        weaponGroup.scale.set(1.1, 1.1, 1.35);
+      } else {
+        weaponGroup.scale.set(1, 1, 1);
+      }
+    }
+
+    function createAmbientParticles() {
+      const count = 400;
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count * 3; i += 3) {
+        positions[i] = (Math.random() - 0.5) * 140;
+        positions[i + 1] = Math.random() * 14 + 0.5;
+        positions[i + 2] = (Math.random() - 0.5) * 140;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const mat = new THREE.PointsMaterial({
+        color: 0x38bdf8,
+        size: 0.22,
+        transparent: true,
+        opacity: 0.65
+      });
+      ambientParticles = new THREE.Points(geo, mat);
+      scene.add(ambientParticles);
+    }
+
+    function createHighDetailHumanoidAI() {
+      aiGroup = new THREE.Group();
+
+      const suitMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.3, metalness: 0.65, emissive: 0x881337, emissiveIntensity: 0.4 });
+      const armorMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2, metalness: 0.9 });
+      const visorGlowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.45 });
+      const gunMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.2, metalness: 0.95 });
+
+      const headGeo = new THREE.SphereGeometry(0.26, 24, 24);
+      const head = new THREE.Mesh(headGeo, skinMat);
+      head.position.set(0, 1.72, 0);
+      head.castShadow = true;
+      aiGroup.add(head);
+
+      const visorGeo = new THREE.BoxGeometry(0.29, 0.09, 0.21);
+      const visor = new THREE.Mesh(visorGeo, visorGlowMat);
+      visor.position.set(0, 1.76, 0.09);
+      aiGroup.add(visor);
+
+      const torsoGeo = new THREE.BoxGeometry(0.58, 0.72, 0.32);
+      const torso = new THREE.Mesh(torsoGeo, suitMat);
+      torso.position.set(0, 1.1, 0);
+      torso.castShadow = true;
+      aiGroup.add(torso);
+
+      const vestGeo = new THREE.BoxGeometry(0.62, 0.5, 0.36);
+      const vest = new THREE.Mesh(vestGeo, armorMat);
+      vest.position.set(0, 1.15, 0);
+      vest.castShadow = true;
+      aiGroup.add(vest);
+
+      const shoulderGeo = new THREE.BoxGeometry(0.22, 0.2, 0.26);
+      const leftShoulder = new THREE.Mesh(shoulderGeo, armorMat);
+      leftShoulder.position.set(-0.42, 1.4, 0);
+      aiGroup.add(leftShoulder);
+
+      const rightShoulder = new THREE.Mesh(shoulderGeo, armorMat);
+      rightShoulder.position.set(0.42, 1.4, 0);
+      aiGroup.add(rightShoulder);
+
+      const legGeo = new THREE.BoxGeometry(0.22, 0.75, 0.25);
+      const leftLeg = new THREE.Mesh(legGeo, suitMat);
+      leftLeg.position.set(-0.16, 0.375, 0);
+      leftLeg.castShadow = true;
+      aiGroup.add(leftLeg);
+
+      const rightLeg = new THREE.Mesh(legGeo, suitMat);
+      rightLeg.position.set(0.16, 0.375, 0);
+      rightLeg.castShadow = true;
+      aiGroup.add(rightLeg);
+
+      const armGeo = new THREE.BoxGeometry(0.18, 0.62, 0.18);
+      const leftArm = new THREE.Mesh(armGeo, suitMat);
+      leftArm.position.set(-0.42, 1.05, 0.05);
+      aiGroup.add(leftArm);
+
+      const rightArm = new THREE.Mesh(armGeo, suitMat);
+      rightArm.position.set(0.42, 1.05, 0.05);
+      aiGroup.add(rightArm);
+
+      const gunBodyGeo = new THREE.BoxGeometry(0.12, 0.14, 0.85);
+      const gun = new THREE.Mesh(gunBodyGeo, gunMat);
+      gun.position.set(0.25, 0.95, 0.38);
+      aiGroup.add(gun);
+
+      aiGroup.position.set(0, 0, -40);
+      scene.add(aiGroup);
+    }
+
+    function resetRoundPositions() {
+      camera.position.set(0, 1.6, selectedMap === 'arena' ? 42 : 60);
+      cameraYaw = 0;
+      cameraPitch = 0;
+      
+      const availableAiAgents = AGENTS.filter(a => a.id !== selectedAgent.id);
+      aiAgent = availableAiAgents[Math.floor(Math.random() * availableAiAgents.length)];
+      document.getElementById('hudAiAgent').textContent = aiAgent.name;
+
+      if (aiGroup) {
+        aiGroup.position.set((Math.random() - 0.5) * 40, 0, selectedMap === 'arena' ? -42 : -55);
+      }
+      aiHp = 100 + aiArmor;
+      aiSkillTimer = 0;
+      playerMaxHp = 100 + playerArmor;
+      playerHp = playerMaxHp;
+      currentAmmo = activeWeapon.ammo;
+      isReloading = false;
+      isAiming = false;
+      isFiring = false;
+      qCooldown = 0;
+      eCooldown = 0;
+      camera.fov = 75;
+      camera.updateProjectionMatrix();
+      updateWeaponViewmodel();
+
+      smokes.forEach(s => {
+        scene.remove(s.group);
+      });
+      smokes = [];
+
+      updateHud();
+      updateSkillHud();
+    }
+
+    function onWindowResize() {
+      if (!camera || !renderer) return;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function initEvents() {
+      const sensRange = document.getElementById('sensRange');
+      const pauseSensRange = document.getElementById('pauseSensRange');
+      const sensValue = document.getElementById('sensValue');
+      const gyroToggleBtn = document.getElementById('gyroToggleBtn');
+
+      function updateSensitivity(val) {
+        sensitivity = parseFloat(val);
+        sensValue.textContent = `${sensitivity.toFixed(1)}배`;
+        sensRange.value = sensitivity;
+        pauseSensRange.value = sensitivity;
+      }
+
+      sensRange.addEventListener('input', (e) => updateSensitivity(e.target.value));
+      pauseSensRange.addEventListener('input', (e) => updateSensitivity(e.target.value));
+
+      gyroToggleBtn.addEventListener('click', async () => {
+        if (!gyroEnabled) {
+          if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+              const res = await DeviceOrientationEvent.requestPermission();
+              if (res === 'granted') {
+                gyroEnabled = true;
+                gyroToggleBtn.textContent = 'ON';
+                gyroToggleBtn.className = 'tac-btn px-3 py-1 bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-xs font-bold';
+              }
+            } catch (err) { alert('자이로스코프 권한을 허용해주세요.'); }
+          } else {
+            gyroEnabled = true;
+            gyroToggleBtn.textContent = 'ON';
+            gyroToggleBtn.className = 'tac-btn px-3 py-1 bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-xs font-bold';
+          }
+        } else {
+          gyroEnabled = false;
+          gyroToggleBtn.textContent = 'OFF';
+          gyroToggleBtn.className = 'tac-btn px-3 py-1 bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold';
+        }
+      });
+
+      document.getElementById('startMatchBtn').addEventListener('click', () => {
+        sound.init();
+        playerCredits = 800;
+        playerPrimary = WEAPONS.vandal;
+        playerSidearm = WEAPONS.classic;
+        activeWeapon = playerPrimary;
+        playerArmor = 0;
+        playerMaxHp = 100;
+        playerHp = 100;
+
+        loadSelectedMap();
+        document.getElementById('lobbyScreen').classList.add('hidden');
+        startBuyPhase();
+      });
+
+      document.getElementById('closeBuyBtn').addEventListener('click', () => {
+        document.getElementById('buyScreen').classList.add('hidden');
+        startActionPhase();
+      });
+
+      document.getElementById('soundToggleBtn').addEventListener('click', () => {
+        sound.enabled = !sound.enabled;
+        document.getElementById('soundToggleBtn').textContent = sound.enabled ? '🔊 사운드 ON' : '🔇 사운드 OFF';
+      });
+
+      document.getElementById('pauseBtn').addEventListener('click', () => {
+        if (gameState === 'PLAY') {
+          isFiring = false;
+          gameState = 'PAUSE';
+          document.getElementById('pauseScreen').classList.remove('hidden');
+        }
+      });
+
+      document.getElementById('resumeBtn').addEventListener('click', () => {
+        document.getElementById('pauseScreen').classList.add('hidden');
+        gameState = 'PLAY';
+      });
+
+      document.getElementById('restartBtn').addEventListener('click', () => {
+        isFiring = false;
+        document.getElementById('pauseScreen').classList.add('hidden');
+        startBuyPhase();
+      });
+
+      document.getElementById('quitBtn').addEventListener('click', () => {
+        isFiring = false;
+        document.getElementById('pauseScreen').classList.add('hidden');
+        document.getElementById('lobbyScreen').classList.remove('hidden');
+        hideGameplayHud();
+        gameState = 'LOBBY';
+      });
+
+      document.getElementById('nextRoundBtn').addEventListener('click', () => {
+        document.getElementById('roundEndScreen').classList.add('hidden');
+        if (playerScore >= 10 || aiScore >= 10) {
+          playerScore = 0;
+          aiScore = 0;
+          roundNum = 1;
+          document.getElementById('lobbyScreen').classList.remove('hidden');
+          gameState = 'LOBBY';
+        } else {
+          startBuyPhase();
+        }
+      });
+
+      document.getElementById('reloadBtn').addEventListener('click', () => reloadWeapon());
+      document.getElementById('switchGunBtn').addEventListener('click', () => {
+        isFiring = false;
+        activeWeapon = (activeWeapon === playerPrimary) ? playerSidearm : playerPrimary;
+        currentAmmo = activeWeapon.ammo;
+        updateWeaponViewmodel();
+        updateHud();
+      });
+
+      const fireBtn = document.getElementById('fireBtn');
+      fireBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isFiring = true;
+        shootWeapon();
+      }, { passive: false });
+
+      fireBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isFiring = false;
+      }, { passive: false });
+
+      fireBtn.addEventListener('touchcancel', () => { isFiring = false; });
+
+      fireBtn.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        isFiring = true;
+        shootWeapon();
+      });
+
+      window.addEventListener('mouseup', () => {
+        isMouseDown = false;
+        isFiring = false;
+      });
+
+      document.getElementById('aimBtn').addEventListener('click', () => {
+        isAiming = !isAiming;
+        const btn = document.getElementById('aimBtn');
+        const crosshair = document.getElementById('crosshair');
+        if (isAiming) {
+          camera.fov = 40;
+          btn.className = 'tac-btn w-12 h-12 bg-cyan-500/30 border border-cyan-400 rounded-xl flex items-center justify-center text-cyan-200 font-bold text-[11px] shadow-lg backdrop-blur';
+          crosshair.style.transform = 'translate(-50%, -50%) scale(0.6)';
+        } else {
+          camera.fov = 75;
+          btn.className = 'tac-btn w-12 h-12 bg-slate-900/85 border border-cyan-500/50 rounded-xl flex items-center justify-center text-cyan-300 font-bold text-[11px] shadow-lg backdrop-blur';
+          crosshair.style.transform = 'translate(-50%, -50%) scale(1)';
+        }
+        camera.updateProjectionMatrix();
+      });
+
+      const bindSkillButton = (id, type) => {
+        const btn = document.getElementById(id);
+        if (btn) {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            useSkill(type);
+          });
+          btn.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            useSkill(type);
+          }, { passive: true });
+        }
+      };
+
+      bindSkillButton('skill1Btn', 'Q');
+      bindSkillButton('skill2Btn', 'E');
+      bindSkillButton('ultimateBtn', 'X');
+
+      const joyZone = document.getElementById('virtualJoystickZone');
+      const knob = document.getElementById('joystickKnob');
+
+      window.addEventListener('touchstart', (e) => {
+        if (gameState !== 'PLAY') return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          const target = document.elementFromPoint(t.clientX, t.clientY);
+
+          if (!joystickActive && (joyZone.contains(target) || t.clientX < window.innerWidth * 0.4 && t.clientY > window.innerHeight * 0.5)) {
+            joystickActive = true;
+            joystickTouchId = t.identifier;
+            const rect = joyZone.getBoundingClientRect();
+            joystickOrigin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            handleJoystickMove(t);
+          } 
+          else if (lookTouchId === null && t.clientX > window.innerWidth * 0.35 && !target.closest('button')) {
+            lookTouchId = t.identifier;
+            lastLookX = t.clientX;
+            lastLookY = t.clientY;
+          }
+        }
+      }, { passive: true });
+
+      window.addEventListener('touchmove', (e) => {
+        if (!joystickActive && lookTouchId === null) return;
+        for (let i = 0; i < e.touches.length; i++) {
+          const t = e.touches[i];
+          if (joystickActive && t.identifier === joystickTouchId) {
+            handleJoystickMove(t);
+          }
+          if (lookTouchId !== null && t.identifier === lookTouchId) {
+            const dx = t.clientX - lastLookX;
+            const dy = t.clientY - lastLookY;
+            const currentSens = isAiming ? sensitivity * 0.5 : sensitivity;
+            cameraYaw -= dx * 0.005 * currentSens;
+            cameraPitch -= dy * 0.005 * currentSens;
+            cameraPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, cameraPitch));
+            lastLookX = t.clientX;
+            lastLookY = t.clientY;
+          }
+        }
+      }, { passive: true });
+
+      window.addEventListener('touchend', (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          if (t.identifier === joystickTouchId) {
+            joystickActive = false;
+            joystickTouchId = null;
+            joystickVector = { x: 0, y: 0 };
+            moveForward = moveBackward = moveLeft = moveRight = false;
+            knob.style.transform = `translate(0px, 0px)`;
+          }
+          if (t.identifier === lookTouchId) {
+            lookTouchId = null;
+          }
+        }
+      }, { passive: true });
+
+      window.addEventListener('mousedown', (e) => {
+        if (gameState === 'PLAY' && e.target.tagName !== 'BUTTON') {
+          isMouseDown = true;
+          window.lastMouseX = e.clientX;
+          window.lastMouseY = e.clientY;
+        }
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (gameState === 'PLAY' && isMouseDown) {
+          const dx = e.clientX - window.lastMouseX;
+          const dy = e.clientY - window.lastMouseY;
+          const currentSens = isAiming ? sensitivity * 0.5 : sensitivity;
+          cameraYaw -= dx * 0.004 * currentSens;
+          cameraPitch -= dy * 0.004 * currentSens;
+          cameraPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, cameraPitch));
+          window.lastMouseX = e.clientX;
+          window.lastMouseY = e.clientY;
+        }
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (gameState !== 'PLAY') return;
+        if (e.key === 'w' || e.key === 'ArrowUp') moveForward = true;
+        if (e.key === 's' || e.key === 'ArrowDown') moveBackward = true;
+        if (e.key === 'a' || e.key === 'ArrowLeft') moveLeft = true;
+        if (e.key === 'd' || e.key === 'ArrowRight') moveRight = true;
+        if (e.key === 'r') reloadWeapon();
+        if (e.key === 'q') useSkill('Q');
+        if (e.key === 'e') useSkill('E');
+        if (e.key === 'x') useSkill('X');
+        if (e.key === ' ') {
+          if (!e.repeat) {
+            isFiring = true;
+            shootWeapon();
+          }
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        if (e.key === 'w' || e.key === 'ArrowUp') moveForward = false;
+        if (e.key === 's' || e.key === 'ArrowDown') moveBackward = false;
+        if (e.key === 'a' || e.key === 'ArrowLeft') moveLeft = false;
+        if (e.key === 'd' || e.key === 'ArrowRight') moveRight = false;
+        if (e.key === ' ') isFiring = false;
+      });
+    }
+
+    function handleJoystickMove(touch) {
+      const knob = document.getElementById('joystickKnob');
+      const dx = touch.clientX - joystickOrigin.x;
+      const dy = touch.clientY - joystickOrigin.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const maxDist = 45;
+
+      const angle = Math.atan2(dy, dx);
+      const clampedDist = Math.min(dist, maxDist);
+      const kx = Math.cos(angle) * clampedDist;
+      const ky = Math.sin(angle) * clampedDist;
+
+      knob.style.transform = `translate(${kx}px, ${ky}px)`;
+      joystickVector.x = kx / maxDist;
+      joystickVector.y = ky / maxDist;
+
+      moveForward = joystickVector.y < -0.25;
+      moveBackward = joystickVector.y > 0.25;
+      moveLeft = joystickVector.x < -0.25;
+      moveRight = joystickVector.x > 0.25;
+    }
+
+    function startBuyPhase() {
+      gameState = 'BUY';
+      isFiring = false;
+      hideGameplayHud();
+      renderShop();
+      document.getElementById('playerCredits').textContent = playerCredits;
+      document.getElementById('buyScreen').classList.remove('hidden');
+    }
+
+    function startActionPhase() {
+      gameState = 'PLAY';
+      showGameplayHud();
+      resetRoundPositions();
+      roundTimer = 90;
+      document.getElementById('hudRoundText').textContent = `10선승제 (${playerScore}:${aiScore})`;
+      
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (gameState === 'PLAY') {
+          roundTimer--;
+          const m = String(Math.floor(roundTimer / 60)).padStart(2, '0');
+          const s = String(roundTimer % 60).padStart(2, '0');
+          document.getElementById('hudTimer').textContent = `${m}:${s}`;
+
+          if (qCooldown > 0) qCooldown--;
+          if (eCooldown > 0) eCooldown--;
+          updateSkillHud();
+
+          if (roundTimer <= 0) {
+            clearInterval(timerInterval);
+            endRound(false, '시간 종료 (디펜더 승리)');
+          }
+        }
+      }, 1000);
+    }
+
+    function showGameplayHud() {
+      document.getElementById('crosshair').classList.remove('hidden');
+      document.getElementById('topHud').classList.remove('hidden');
+      document.getElementById('bottomHud').classList.remove('hidden');
+      document.getElementById('mobileActionControls').classList.remove('hidden');
+      document.getElementById('virtualJoystickZone').classList.remove('hidden');
+      document.getElementById('pauseBtn').classList.remove('hidden');
+
+      document.getElementById('hudPlayerAgent').textContent = selectedAgent.name;
+      document.getElementById('hudAiAgent').textContent = aiAgent.name;
+      document.getElementById('skill1Icon').textContent = selectedAgent.qIcon;
+      document.getElementById('skill2Icon').textContent = selectedAgent.eIcon;
+      document.getElementById('ultIcon').textContent = selectedAgent.xIcon;
+    }
+
+    function hideGameplayHud() {
+      document.getElementById('crosshair').classList.add('hidden');
+      document.getElementById('topHud').classList.add('hidden');
+      document.getElementById('bottomHud').classList.add('hidden');
+      document.getElementById('mobileActionControls').classList.add('hidden');
+      document.getElementById('virtualJoystickZone').classList.add('hidden');
+      document.getElementById('pauseBtn').classList.add('hidden');
+    }
+
+    function updateHud() {
+      document.getElementById('hpText').textContent = `${Math.max(0, playerHp)} / ${playerMaxHp}`;
+      document.getElementById('hpBar').style.width = `${Math.max(0, (playerHp / playerMaxHp) * 100)}%`;
+      document.getElementById('ammoText').textContent = currentAmmo;
+      document.getElementById('weaponNameDisplay').textContent = activeWeapon.name.toUpperCase();
+      document.getElementById('hudPlayerScore').textContent = playerScore;
+      document.getElementById('hudAiScore').textContent = aiScore;
+    }
+
+    function updateSkillHud() {
+      const qBtn = document.getElementById('skill1Btn');
+      const qCd = document.getElementById('skill1Cd');
+      if (qCooldown > 0) {
+        qBtn.classList.add('cooldown');
+        qCd.style.display = 'flex';
+        qCd.textContent = `${qCooldown}s`;
+      } else {
+        qBtn.classList.remove('cooldown');
+        qCd.style.display = 'none';
+      }
+
+      const eBtn = document.getElementById('skill2Btn');
+      const eCd = document.getElementById('skill2Cd');
+      if (eCooldown > 0) {
+        eBtn.classList.add('cooldown');
+        eCd.style.display = 'flex';
+        eCd.textContent = `${eCooldown}s`;
+      } else {
+        eBtn.classList.remove('cooldown');
+        eCd.style.display = 'none';
+      }
+    }
+
+    function createHitSparks(pos, colorHex = 0xfbbf24) {
+      for (let i = 0; i < 8; i++) {
+        const geo = new THREE.BoxGeometry(0.06, 0.06, 0.06);
+        const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+        const spark = new THREE.Mesh(geo, mat);
+        spark.position.copy(pos);
+        const vel = new THREE.Vector3(
+          (Math.random() - 0.5) * 8,
+          Math.random() * 6 + 2,
+          (Math.random() - 0.5) * 8
+        );
+        scene.add(spark);
+        hitSparks.push({ mesh: spark, vel: vel, life: 0.35 });
+      }
+    }
+
+    function createBulletTracer(startPos, endPos, isPlayer = true) {
+      const distance = startPos.distanceTo(endPos);
+      const tracerGeo = new THREE.CylinderGeometry(0.032, 0.032, distance, 6);
+      tracerGeo.rotateX(Math.PI / 2);
+      
+      const tracerMat = new THREE.MeshBasicMaterial({
+        color: isPlayer ? 0x22d3ee : 0xf43f5e,
+        transparent: true,
+        opacity: 0.85
+      });
+      
+      const tracer = new THREE.Mesh(tracerGeo, tracerMat);
+      tracer.position.copy(startPos).add(endPos).multiplyScalar(0.5);
+      tracer.lookAt(endPos);
+      
+      scene.add(tracer);
+      bulletTracers.push({ mesh: tracer, life: 0.14 });
+    }
+
+    function createSmokeCloud(pos, colorHex = 0x334155) {
+      const smokeGroup = new THREE.Group();
+      smokeGroup.position.copy(pos);
+
+      const coreGeo = new THREE.SphereGeometry(3.4, 24, 24);
+      const coreMat = new THREE.MeshStandardMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 0.82,
+        roughness: 0.9
+      });
+      const core = new THREE.Mesh(coreGeo, coreMat);
+      smokeGroup.add(core);
+
+      const shellGeo = new THREE.IcosahedronGeometry(3.9, 2);
+      const shellMat = new THREE.MeshStandardMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 0.35,
+        wireframe: false,
+        roughness: 0.8
+      });
+      const shell = new THREE.Mesh(shellGeo, shellMat);
+      smokeGroup.add(shell);
+
+      scene.add(smokeGroup);
+      smokes.push({ group: smokeGroup, core: core, shell: shell, life: 6.5 });
+    }
+
+    function checkWallCollision(pos, radius = 0.8) {
+      for (let wall of mapColliders) {
+        const box = new THREE.Box3().setFromObject(wall);
+        const expanded = box.clone().expandByScalar(radius);
+        if (expanded.containsPoint(pos)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function shootWeapon() {
+      if (gameState !== 'PLAY' || isReloading) return;
+      
+      const now = Date.now() / 1000;
+      if (now - lastShootTime < activeWeapon.fireRate) return;
+      lastShootTime = now;
+
+      if (currentAmmo <= 0) {
+        reloadWeapon();
+        return;
+      }
+      currentAmmo--;
+      updateHud();
+      sound.playShoot(activeWeapon.name);
+
+      weaponRecoilOffset = 0.12;
+      if (muzzleFlashMesh && muzzleLight) {
+        muzzleFlashMesh.material.opacity = 0.95;
+        muzzleFlashMesh.rotation.z = Math.random() * Math.PI;
+        muzzleLight.intensity = 4.0;
+        setTimeout(() => {
+          if (muzzleFlashMesh) muzzleFlashMesh.material.opacity = 0;
+          if (muzzleLight) muzzleLight.intensity = 0;
+        }, 55);
+      }
+
+      const recoilAmount = isAiming ? activeWeapon.recoil * 0.5 : activeWeapon.recoil;
+      cameraPitch += recoilAmount;
+      cameraPitch = Math.min(Math.PI / 2.2, cameraPitch);
+
+      const raycaster = new THREE.Raycaster();
+      const center = new THREE.Vector2(0, 0);
+      raycaster.setFromCamera(center, camera);
+
+      const wallIntersects = raycaster.intersectObjects(mapColliders);
+      const aiIntersects = raycaster.intersectObjects(aiGroup.children);
+
+      let targetEndPoint = camera.position.clone().add(raycaster.ray.direction.clone().multiplyScalar(60));
+
+      const muzzleWorldPos = new THREE.Vector3();
+      if (muzzleFlashMesh) {
+        muzzleFlashMesh.getWorldPosition(muzzleWorldPos);
+      } else {
+        muzzleWorldPos.copy(camera.position);
+      }
+
+      if (aiIntersects.length > 0) {
+        const hitDistance = aiIntersects[0].distance;
+        const wallBlocked = wallIntersects.length > 0 && wallIntersects[0].distance < hitDistance;
+
+        if (!wallBlocked && hitDistance < 80) {
+          targetEndPoint.copy(aiIntersects[0].point);
+          const isHeadshot = aiIntersects[0].point.y > aiGroup.position.y + 1.45;
+          const dmg = isHeadshot ? activeWeapon.hsDamage : activeWeapon.damage;
+          aiHp -= dmg;
+          sound.playHit(isHeadshot);
+          triggerHitmarker(isHeadshot);
+          showDamageNumber(aiIntersects[0].point, dmg, isHeadshot);
+          createHitSparks(aiIntersects[0].point, isHeadshot ? 0xfbbf24 : 0xf43f5e);
+
+          if (aiHp <= 0) {
+            endRound(true, '적이 처치되었습니다!');
+          }
+        }
+      } else if (wallIntersects.length > 0) {
+        targetEndPoint.copy(wallIntersects[0].point);
+        createHitSparks(wallIntersects[0].point, 0x38bdf8);
+      }
+
+      createBulletTracer(muzzleWorldPos, targetEndPoint, true);
+
+      if (currentAmmo <= 0) {
+        reloadWeapon();
+      }
+    }
+
+    function reloadWeapon() {
+      if (gameState !== 'PLAY' || isReloading || currentAmmo === activeWeapon.ammo) return;
+      isReloading = true;
+      document.getElementById('weaponNameDisplay').textContent = 'RELOADING...';
+      setTimeout(() => {
+        currentAmmo = activeWeapon.ammo;
+        isReloading = false;
+        updateHud();
+      }, 1200);
+    }
+
+    function useSkill(type) {
+      if (gameState !== 'PLAY') return;
+      
+      if (type === 'Q') {
+        if (qCooldown > 0) return;
+        qCooldown = 6;
+      } else if (type === 'E') {
+        if (eCooldown > 0) return;
+        eCooldown = 8;
+      }
+
+      updateSkillHud();
+      sound.playSkill();
+      
+      const banner = document.getElementById('skillHitBanner');
+      const text = document.getElementById('skillHitText');
+
+      if (type === 'Q') {
+        if (selectedAgent.id === 'jett') {
+          text.textContent = `제트: 연막 폭풍 생성! (시야 차단)`;
+          const dir = new THREE.Vector3();
+          camera.getWorldDirection(dir);
+          const smokePos = camera.position.clone().addScaledVector(dir, 8);
+          smokePos.y = 1.6;
+          createSmokeCloud(smokePos, 0x94a3b8);
+        } else if (selectedAgent.id === 'phoenix') {
+          text.textContent = `피닉스: 화염 폭풍 작렬! (피해 60)`;
+          launchProjectile(0xf97316, 60, true);
+        } else if (selectedAgent.id === 'sage') {
+          text.textContent = `세이지: 얼음 파편 투척! (피해 55)`;
+          launchProjectile(0x10b981, 55, true);
+        } else if (selectedAgent.id === 'omen') {
+          text.textContent = `오멘: 그림자 장막 연막 전개! (시야 차단)`;
+          const dir = new THREE.Vector3();
+          camera.getWorldDirection(dir);
+          const smokePos = camera.position.clone().addScaledVector(dir, 10);
+          smokePos.y = 1.6;
+          createSmokeCloud(smokePos, 0x1e1b4b);
+        } else if (selectedAgent.id === 'neon') {
+          text.textContent = `네온: 플라즈마 볼트 폭격! (피해 60)`;
+          launchProjectile(0x38bdf8, 60, true);
+        }
+      } else if (type === 'E') {
+        if (selectedAgent.id === 'jett') {
+          text.textContent = `제트: 순풍 대시 이동!`;
+          const dir = new THREE.Vector3();
+          camera.getWorldDirection(dir);
+          const nextPos = camera.position.clone().addScaledVector(dir, 8);
+          if (!checkWallCollision(nextPos, 1.0)) {
+            camera.position.copy(nextPos);
+          }
+          const dashOverlay = document.getElementById('dashOverlay');
+          dashOverlay.style.opacity = '1';
+          setTimeout(() => dashOverlay.style.opacity = '0', 250);
+          playerHp = Math.min(playerMaxHp, playerHp + 50);
+        } else if (selectedAgent.id === 'phoenix') {
+          text.textContent = `피닉스: 화염 회복! (체력 60 회복)`;
+          playerHp = Math.min(playerMaxHp, playerHp + 60);
+        } else if (selectedAgent.id === 'sage') {
+          text.textContent = `세이지: 회복 구슬 치유! (체력 70 회복)`;
+          playerHp = Math.min(playerMaxHp, playerHp + 70);
+        } else if (selectedAgent.id === 'omen') {
+          text.textContent = `오멘: 순간이동!`;
+          const dir = new THREE.Vector3();
+          camera.getWorldDirection(dir);
+          const nextPos = camera.position.clone().addScaledVector(dir, 6);
+          if (!checkWallCollision(nextPos, 1.0)) {
+            camera.position.copy(nextPos);
+          }
+        } else if (selectedAgent.id === 'neon') {
+          text.textContent = `네온: 하이 기어 초고속 질주!`;
+          const dir = new THREE.Vector3();
+          camera.getWorldDirection(dir);
+          const nextPos = camera.position.clone().addScaledVector(dir, 10);
+          if (!checkWallCollision(nextPos, 1.0)) {
+            camera.position.copy(nextPos);
+          }
+          playerHp = Math.min(playerMaxHp, playerHp + 40);
+        }
+        updateHud();
+      } else if (type === 'X') {
+        text.textContent = `${selectedAgent.name}: 궁극기 폭격! (피해 130)`;
+        launchProjectile(selectedAgent.color, 130, true);
+      }
+
+      banner.classList.add('show');
+      setTimeout(() => banner.classList.remove('show'), 1500);
+
+      if (aiHp <= 0) {
+        endRound(true, '스킬로 적을 섬멸했습니다!');
+      }
+    }
+
+    function aiUseSkill() {
+      sound.playSkill();
+      const banner = document.getElementById('skillHitBanner');
+      const text = document.getElementById('skillHitText');
+
+      if (aiAgent.id === 'jett') {
+        text.textContent = `⚠️ 상대 ${aiAgent.name}: 연막 투척 후 블레이드 스톰 적중!`;
+        launchProjectile(0xf43f5e, 35, false);
+      } else if (aiAgent.id === 'phoenix') {
+        text.textContent = `⚠️ 상대 ${aiAgent.name}: 화염 폭풍 폭격 적중! (피해 40)`;
+        playerHp -= 40;
+        const flash = document.getElementById('flashOverlay');
+        flash.style.opacity = '0.6';
+        setTimeout(() => flash.style.opacity = '0', 250);
+      } else if (aiAgent.id === 'sage') {
+        text.textContent = `⚠️ 상대 ${aiAgent.name}: 얼음 파편 공격 적중! (피해 40)`;
+        playerHp -= 40;
+      } else if (aiAgent.id === 'omen') {
+        text.textContent = `⚠️ 상대 ${aiAgent.name}: 그림자 장막 연막 전개 및 어둠탄 적중! (피해 35)`;
+        playerHp -= 35;
+      } else if (aiAgent.id === 'neon') {
+        text.textContent = `⚠️ 상대 ${aiAgent.name}: 플라즈마 볼트 적중! (피해 40)`;
+        playerHp -= 40;
+      }
+
+      updateHud();
+      banner.classList.add('show');
+      setTimeout(() => banner.classList.remove('show'), 1500);
+
+      const vignette = document.getElementById('damageVignette');
+      vignette.style.opacity = '1';
+      setTimeout(() => vignette.style.opacity = '0', 200);
+
+      if (playerHp <= 0) {
+        endRound(false, `상대 ${aiAgent.name}의 스킬에 처치되었습니다.`);
+      }
+    }
+
+    function launchProjectile(colorHex, damage, isPlayer = true) {
+      const pGeo = new THREE.SphereGeometry(0.38, 16, 16);
+      const pMat = new THREE.MeshBasicMaterial({ color: colorHex });
+      const proj = new THREE.Mesh(pGeo, pMat);
+
+      if (isPlayer) {
+        proj.position.copy(camera.position);
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        proj.userData = { dir: dir, damage: damage, life: 3.0, isPlayer: true, color: colorHex };
+      } else {
+        proj.position.copy(aiGroup.position);
+        proj.position.y += 1.5;
+        const dir = new THREE.Vector3().subVectors(camera.position, proj.position).normalize();
+        proj.userData = { dir: dir, damage: damage, life: 3.0, isPlayer: false, color: colorHex };
+      }
+
+      scene.add(proj);
+      projectiles.push(proj);
+    }
+
+    function triggerHitmarker(headshot) {
+      const hm = document.getElementById('hitmarker');
+      hm.className = headshot ? 'headshot' : '';
+      hm.style.opacity = '1';
+      setTimeout(() => hm.style.opacity = '0', 1200);
+    }
+
+    function showDamageNumber(pos, dmg, headshot) {
+      const vector = pos.clone();
+      vector.project(camera);
+
+      const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+      const y = (-(vector.y * 0.5) + 0.5) * window.innerHeight;
+
+      const div = document.createElement('div');
+      div.className = `absolute font-black font-mono transition-all duration-500 pointer-events-none ${headshot ? 'text-amber-400 text-2xl scale-125' : 'text-cyan-300 text-lg'}`;
+      div.style.left = `${x}px`;
+      div.style.top = `${y}px`;
+      div.textContent = dmg;
+
+      document.getElementById('damageNumbersLayer').appendChild(div);
+      setTimeout(() => {
+        div.style.transform = `translateY(-35px) scale(0.9)`;
+        div.style.opacity = '0';
+      }, 30);
+      setTimeout(() => div.remove(), 600);
+    }
+
+    function endRound(playerWon, reason) {
+      if (gameState === 'ROUND_END') return;
+      gameState = 'ROUND_END';
+      isFiring = false;
+      if (timerInterval) clearInterval(timerInterval);
+
+      if (playerWon) {
+        playerScore++;
+        playerCredits += 800;
+      } else {
+        aiScore++;
+        playerCredits += 300;
+      }
+
+      if (playerScore >= 10) {
+        document.getElementById('roundEndTitle').textContent = 'VICTORY (10승 달성!)';
+        document.getElementById('roundEndTitle').className = 'text-3xl md:text-5xl font-black tracking-widest mb-2 uppercase text-cyan-400';
+        document.getElementById('nextRoundBtn').textContent = '로비로 돌아가기';
+      } else if (aiScore >= 10) {
+        document.getElementById('roundEndTitle').textContent = 'DEFEAT (상대 10승 달성)';
+        document.getElementById('roundEndTitle').className = 'text-3xl md:text-5xl font-black tracking-widest mb-2 uppercase text-rose-500';
+        document.getElementById('nextRoundBtn').textContent = '로비로 돌아가기';
+      } else {
+        if (playerWon) {
+          document.getElementById('roundEndTitle').textContent = 'ROUND WIN';
+          document.getElementById('roundEndTitle').className = 'text-4xl md:text-6xl font-black tracking-widest mb-2 uppercase text-cyan-400';
+        } else {
+          document.getElementById('roundEndTitle').textContent = 'ROUND LOST';
+          document.getElementById('roundEndTitle').className = 'text-4xl md:text-6xl font-black tracking-widest mb-2 uppercase text-rose-500';
+        }
+        document.getElementById('nextRoundBtn').textContent = '다음 라운드 진행';
+      }
+
+      document.getElementById('roundEndSub').textContent = reason;
+      document.getElementById('endPlayerScore').textContent = playerScore;
+      document.getElementById('endAiScore').textContent = aiScore;
+
+      hideGameplayHud();
+      document.getElementById('roundEndScreen').classList.remove('hidden');
+      roundNum++;
+    }
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = clock.getDelta();
+      const time = clock.getElapsedTime();
+
+      if (neonLights.length > 0) {
+        neonLights.forEach((light, i) => {
+          light.intensity = 3.8 + Math.sin(time * 3.5 + i) * 1.1;
+        });
+      }
+
+      if (ambientParticles) {
+        ambientParticles.rotation.y += delta * 0.04;
+      }
+
+      for (let i = hitSparks.length - 1; i >= 0; i--) {
+        const s = hitSparks[i];
+        s.life -= delta;
+        s.vel.y -= 18 * delta;
+        s.mesh.position.addScaledVector(s.vel, delta);
+        s.mesh.scale.setScalar(Math.max(0.01, s.life / 0.35));
+        if (s.life <= 0) {
+          scene.remove(s.mesh);
+          s.mesh.geometry.dispose();
+          s.mesh.material.dispose();
+          hitSparks.splice(i, 1);
+        }
+      }
+
+      for (let i = smokes.length - 1; i >= 0; i--) {
+        const s = smokes[i];
+        s.life -= delta;
+        s.shell.rotation.y += delta * 0.6;
+        s.shell.rotation.x += delta * 0.3;
+        const alphaRatio = Math.max(0, s.life / 6.5);
+        s.core.material.opacity = alphaRatio * 0.82;
+        s.shell.material.opacity = alphaRatio * 0.35;
+        if (s.life <= 0) {
+          scene.remove(s.group);
+          smokes.splice(i, 1);
+        }
+      }
+
+      for (let i = bulletTracers.length - 1; i >= 0; i--) {
+        const tracerObj = bulletTracers[i];
+        tracerObj.life -= delta;
+        tracerObj.mesh.material.opacity = Math.max(0, tracerObj.life / 0.14 * 0.85);
+        if (tracerObj.life <= 0) {
+          scene.remove(tracerObj.mesh);
+          tracerObj.mesh.geometry.dispose();
+          tracerObj.mesh.material.dispose();
+          bulletTracers.splice(i, 1);
+        }
+      }
+
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        p.position.addScaledVector(p.userData.dir, 30 * delta);
+        p.userData.life -= delta;
+
+        if (checkWallCollision(p.position, 0.4)) {
+          createHitSparks(p.position, p.userData.color);
+          scene.remove(p);
+          projectiles.splice(i, 1);
+          continue;
+        }
+
+        if (gameState === 'PLAY') {
+          if (p.userData.isPlayer && aiGroup && p.position.distanceTo(aiGroup.position) < 1.5) {
+            aiHp -= p.userData.damage;
+            sound.playHit(true);
+            showDamageNumber(aiGroup.position, p.userData.damage, true);
+            createHitSparks(p.position, p.userData.color);
+            scene.remove(p);
+            projectiles.splice(i, 1);
+
+            if (aiHp <= 0) {
+              endRound(true, '스킬 투사체로 적을 섬멸했습니다!');
+            }
+            continue;
+          } else if (!p.userData.isPlayer && p.position.distanceTo(camera.position) < 1.5) {
+            playerHp -= p.userData.damage;
+            sound.playHit(false);
+            const vignette = document.getElementById('damageVignette');
+            vignette.style.opacity = '1';
+            setTimeout(() => vignette.style.opacity = '0', 200);
+            updateHud();
+            scene.remove(p);
+            projectiles.splice(i, 1);
+
+            if (playerHp <= 0) {
+              endRound(false, `상대 ${aiAgent.name}의 투사체에 처치되었습니다.`);
+            }
+            continue;
+          }
+        }
+
+        if (p.userData.life <= 0) {
+          scene.remove(p);
+          projectiles.splice(i, 1);
+        }
+      }
+
+      if (gameState === 'PLAY') {
+        if (isFiring && activeWeapon.auto) {
+          shootWeapon();
+        }
+
+        const speed = 7.5 * delta;
+        const dir = new THREE.Vector3();
+
+        if (moveForward) dir.z -= 1;
+        if (moveBackward) dir.z += 1;
+        if (moveLeft) dir.x -= 1;
+        if (moveRight) dir.x += 1;
+
+        const isMoving = dir.lengthSq() > 0;
+
+        dir.normalize();
+        dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
+        
+        const nextPos = camera.position.clone().addScaledVector(dir, speed);
+        const limitRange = selectedMap === 'arena' ? 48 : 72;
+        nextPos.x = Math.max(-limitRange, Math.min(limitRange, nextPos.x));
+        nextPos.z = Math.max(-limitRange, Math.min(limitRange, nextPos.z));
+        nextPos.y = 1.6;
+
+        if (!checkWallCollision(nextPos, 0.9)) {
+          camera.position.copy(nextPos);
+        }
+
+        if (weaponGroup) {
+          weaponRecoilOffset = THREE.MathUtils.lerp(weaponRecoilOffset, 0, delta * 14);
+          weaponSwayTime += delta * (isMoving ? 10 : 2.2);
+          const swayX = Math.cos(weaponSwayTime * 0.5) * (isMoving ? 0.015 : 0.003);
+          const swayY = Math.abs(Math.sin(weaponSwayTime * 0.5)) * (isMoving ? 0.015 : 0.003);
+
+          const baseX = isAiming ? 0.0 : 0.28;
+          const baseY = isAiming ? -0.18 : -0.26;
+          const baseZ = isAiming ? -0.35 : -0.45;
+
+          weaponGroup.position.set(
+            baseX + swayX,
+            baseY - swayY + weaponRecoilOffset * 0.25,
+            baseZ + weaponRecoilOffset
+          );
+          weaponGroup.rotation.x = weaponRecoilOffset * 0.6;
+        }
+
+        const euler = new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ');
+        camera.quaternion.setFromEuler(euler);
+
+        if (aiGroup) {
+          const toPlayer = new THREE.Vector3().subVectors(camera.position, aiGroup.position);
+          const distToPlayer = toPlayer.length();
+          toPlayer.y = 0;
+          toPlayer.normalize();
+
+          aiMoveAngle += delta * 1.0;
+          const strafeOffset = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x).multiplyScalar(Math.sin(aiMoveAngle) * 3.5);
+          
+          let targetAiPos = camera.position.clone().addScaledVector(toPlayer, -20).add(strafeOffset);
+          const aiLimit = selectedMap === 'arena' ? 45 : 70;
+          targetAiPos.x = Math.max(-aiLimit, Math.min(aiLimit, targetAiPos.x));
+          targetAiPos.z = Math.max(-aiLimit, Math.min(aiLimit, targetAiPos.z));
+          targetAiPos.y = 0;
+
+          const currentAiPos = aiGroup.position.clone();
+          const trialX = currentAiPos.clone();
+          trialX.x = THREE.MathUtils.lerp(currentAiPos.x, targetAiPos.x, delta * 1.0);
+          if (!checkWallCollision(trialX, 1.0)) {
+            aiGroup.position.x = trialX.x;
+          }
+
+          const trialZ = aiGroup.position.clone();
+          trialZ.z = THREE.MathUtils.lerp(currentAiPos.z, targetAiPos.z, delta * 1.0);
+          if (!checkWallCollision(trialZ, 1.0)) {
+            aiGroup.position.z = trialZ.z;
+          }
+
+          aiGroup.position.y = 0;
+          aiGroup.lookAt(camera.position.x, aiGroup.position.y, camera.position.z);
+
+          aiShootTimer += delta;
+          aiSkillTimer += delta;
+
+          if (aiSkillTimer > 5.5 && distToPlayer < 45) {
+            aiSkillTimer = 0;
+            aiUseSkill();
+          }
+
+          if (aiShootTimer > 1.5 && distToPlayer < 45) {
+            aiShootTimer = 0;
+            
+            const aiGunPos = aiGroup.position.clone().add(new THREE.Vector3(0, 1.4, 0));
+            const raycaster = new THREE.Raycaster(aiGunPos, toPlayer, 0, distToPlayer);
+            const wallHits = raycaster.intersectObjects(mapColliders);
+
+            if (wallHits.length === 0) {
+              const hitChance = Math.random();
+              const aiHitTargetPos = camera.position.clone();
+              
+              createBulletTracer(aiGunPos, aiHitTargetPos, false);
+
+              if (hitChance > 0.45) {
+                const dmg = 18;
+                playerHp -= dmg;
+                sound.playHit(false);
+                const vignette = document.getElementById('damageVignette');
+                vignette.style.opacity = '1';
+                setTimeout(() => vignette.style.opacity = '0', 200);
+                updateHud();
+
+                if (playerHp <= 0) {
+                  endRound(false, `상대 ${aiAgent.name}의 사격에 처치되었습니다.`);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
